@@ -32,6 +32,8 @@ dependencies {
 	implementation 'org.springframework:spring-messaging'
 	implementation 'org.springframework:spring-websocket'
 	implementation 'jakarta.servlet:jakarta.servlet-api:6.0.0'
+	implementation("com.sksamuel.scrimage:scrimage-core:4.5.1")
+	implementation("com.sksamuel.scrimage:scrimage-webp:4.5.1")
 	runtimeOnly 'org.postgresql:postgresql'
 }
 

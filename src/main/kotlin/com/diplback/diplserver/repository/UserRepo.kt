@@ -11,4 +11,6 @@ interface UserRepo : CrudRepository<User, Int> {
     @Query("SELECT r FROM $TABLE_USER r WHERE r.phone LIKE :userPhone")
     fun findByPhone(@Param("userPhone") userPhone: String): User?
 
+    @Query("SELECT u FROM $TABLE_USER u WHERE u.name = :userName")
+    fun findByName(@Param("userName") userName: String): User?
 }

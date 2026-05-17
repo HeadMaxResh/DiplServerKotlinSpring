@@ -20,21 +20,16 @@ class MyInterceptor : HandlerInterceptor {
         handler: Any
     ): Boolean {
 
-        // Получить заголовок Authorization из запроса
         val authorizationHeader = request.getHeader("Authorization")
 
-        // Проверить наличие токена доступа в заголовке
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
             val accessToken = authorizationHeader.substringAfter("Bearer ")
 
-            // Проверить токен доступа на валидность
             if (isValidAccessToken(accessToken)) {
-                // Токен доступа действителен, разрешить доступ
                 return true
             }
         }
 
-        // Если токен доступа недействителен, вернуть ошибку доступа
         //response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized access")
         return true
     }

@@ -96,4 +96,9 @@ class ContractController {
         return contractRepo.findContractsByUserSenderIdOrUserOwnerId(userId)
     }
 
+    @GetMapping("/all")
+    fun getAllContracts(): List<Contract> {
+        return contractRepo.findAll().toList()
+    }
+
 }
