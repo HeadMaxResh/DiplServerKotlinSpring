@@ -10,17 +10,19 @@ data class ApartmentInfo(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Int = -1,
-    val name: String,
-    val city: String,
+    var name: String,
+    var city: String,
     val rent: Int,
-    val area: Float,
-    val listImages: List<String>,
-    val countRooms: Int,
+    var area: Float,
+    var listImages: List<String>,
+    var countRooms: Int,
     var rate: Double,
     @ManyToOne
     val userOwner: User,
     //@Lob
-    val description: String,
+    var description: String,
     @OneToMany
-    val reviewList: MutableList<Review> = emptyList()
+    val reviewList: MutableList<Review> = emptyList(),
+    var hide: Boolean = false,
+    val cadastr: String
 )

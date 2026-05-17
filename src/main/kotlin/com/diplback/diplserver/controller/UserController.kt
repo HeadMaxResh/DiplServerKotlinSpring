@@ -7,11 +7,17 @@ import com.diplback.diplserver.model.User
 import com.diplback.diplserver.repository.ApartmentInfoRepo
 import com.diplback.diplserver.repository.UserRepo
 import com.diplback.diplserver.service.ElectronicSignatureService
+import com.diplback.diplserver.service.FileStorageService
 import jakarta.persistence.EntityNotFoundException
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.multipart.MultipartFile
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.util.UUID
 
 @RestController
 @RequestMapping("/")
@@ -26,7 +32,13 @@ class UserController {
     lateinit var electronicSignatureService: ElectronicSignatureService
 
     @GetMapping("/users")
-    fun getAll(): Iterable<User> = userRepo.findAll()
+    fun getAll(): List<User> = userRepo.findAll().toList()
+
+    @Value("\${app.upload.dir}")
+    lateinit var uploadDir: String
+
+    @Autowired
+    lateinit var fileStorageService: FileStorageService
 
     @PostMapping("/login")
     fun login(@RequestBody userDto: UserDto): ResponseEntity<User?> {
@@ -48,6 +60,15 @@ class UserController {
     @GetMapping("/user/{userId}")
     fun getUserById(@PathVariable userId: Int): ResponseEntity<User> {
         val user = userRepo.findById(userId).orElse(null)
+
+        return user?.let {
+            ResponseEntity.ok(it)
+        } ?: ResponseEntity.notFound().build()
+    }
+
+    @GetMapping("/user/{userName}/name")
+    fun getUserByName(@PathVariable userName: String): ResponseEntity<User> {
+        val user = userRepo.findByName(userName)
 
         return user?.let {
             ResponseEntity.ok(it)
@@ -131,4 +152,44 @@ class UserController {
         return ResponseEntity(isFavorite, HttpStatus.OK)
     }
 
+    /*@PostMapping("/user/{userId}/photo")
+    fun uploadUserPhoto(
+        @PathVariable userId: Int,
+        @RequestParam("file") file: MultipartFile
+    ): ResponseEntity<User> {
+        val user = userRepo.findById(userId)
+            .orElseThrow { EntityNotFoundException("User not found") }
+
+        val uploadsPath = Paths.get(uploadDir).toAbsolutePath().normalize()
+        Files.createDirectories(uploadsPath)
+
+        val originalName = file.originalFilename ?: "photo.jpg"
+        val extension = originalName.substringAfterLast('.', "jpg")
+        val fileName = "${UUID.randomUUID()}.$extension"
+
+        val targetPath = uploadsPath.resolve(fileName)
+        file.inputStream.use { input ->
+            Files.copy(input, targetPath)
+        }
+
+        user.photoUser = "/uploads/$fileName"
+        val savedUser = userRepo.save(user)
+
+        return ResponseEntity.ok(savedUser)
+    }*/
+
+    @PostMapping("/user/{userId}/photo")
+    fun uploadUserPhoto(
+        @PathVariable userId: Int,
+        @RequestParam("file") file: MultipartFile
+    ): ResponseEntity<User> {
+        val user = userRepo.findById(userId)
+            .orElseThrow { EntityNotFoundException("User not found") }
+
+        val photoUrl = fileStorageService.saveUserAvatar(userId, file)
+
+        user.photoUser = photoUrl
+
+        return ResponseEntity.ok(userRepo.save(user))
+    }
 }

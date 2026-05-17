@@ -12,4 +12,5 @@ data class ApartmentInfoDto(
     val countRooms: Int,
     val userOwner: User,
     val description: String,
+    val cadastr: String
 )
