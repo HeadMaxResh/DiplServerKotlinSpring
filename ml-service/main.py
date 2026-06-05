@@ -4,6 +4,8 @@ from image.advanced_image_analyzer import AdvancedImageAnalyzer
 from geo.geo_analyzer import GeoAnalyzer
 from text.text_analyzer import TextAnalyzer
 from price.price_evaluator import PriceEvaluator
+from pydantic import BaseModel
+from typing import Dict, Any
 import io
 import numpy as np
 import cv2
@@ -158,6 +160,36 @@ def analyze_images_sync(photo_bytes_list):
         "photosCount": len(photo_results),
         "apartmentSummary": image_summary,
         "photos": photo_results
+    }
+
+
+class CalculateFromAnalysisRequest(BaseModel):
+    area: float
+    rooms: int
+    textAnalysis: Dict[str, Any]
+    imageAnalysis: Dict[str, Any]
+    geoAnalysis: Dict[str, Any]
+
+@app.post("/calculate-from-analysis")
+def calculate_from_analysis(request: CalculateFromAnalysisRequest):
+    price_result = price_evaluator.evaluate_price(
+        area=request.area,
+        rooms=request.rooms,
+        text_result=request.textAnalysis,
+        image_result=request.imageAnalysis,
+        geo_result=request.geoAnalysis
+    )
+
+    return {
+        "success": True,
+        "price": {
+            "recommendedPrice": price_result["finalRecommendedPrice"],
+            "minPrice": price_result["minPrice"],
+            "maxPrice": price_result["maxPrice"],
+            "marketBasePrice": price_result["marketBasePrice"],
+            "coefficients": price_result["coefficients"],
+            "priceFactors": price_result["priceFactors"]
+        }
     }
 
 @app.post("/analyze-text")

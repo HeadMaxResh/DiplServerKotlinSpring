@@ -11,3 +11,4 @@ ultralytics
 transformers
 requests
 geopy
+pydantic

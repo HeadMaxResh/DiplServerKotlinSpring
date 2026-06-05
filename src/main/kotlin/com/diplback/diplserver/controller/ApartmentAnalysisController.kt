@@ -1,5 +1,6 @@
 package com.diplback.diplserver.controller
 
+import com.diplback.diplserver.dto.CalculateFromAnalysisRequest
 import com.diplback.diplserver.service.MlServiceClient
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -11,6 +12,18 @@ import org.springframework.web.multipart.MultipartFile
 class ApartmentAnalysisController(
     private val mlServiceClient: MlServiceClient
 ) {
+
+    @PostMapping(
+        "/calculate-from-analysis",
+        consumes = [MediaType.APPLICATION_JSON_VALUE]
+    )
+    fun calculateFromAnalysis(
+        @RequestBody request: CalculateFromAnalysisRequest
+    ): ResponseEntity<String> {
+        return ResponseEntity.ok(
+            mlServiceClient.calculateFromAnalysis(request)
+        )
+    }
 
     @PostMapping(
         "/analyze-photos",

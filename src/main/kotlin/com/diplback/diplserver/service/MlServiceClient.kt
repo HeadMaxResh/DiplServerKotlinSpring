@@ -1,6 +1,7 @@
 package com.diplback.diplserver.service
 
 import com.diplback.diplserver.MultipartInputStreamFileResource
+import com.diplback.diplserver.dto.CalculateFromAnalysisRequest
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
@@ -15,6 +16,19 @@ class MlServiceClient(
 ) {
 
     private val mlBaseUrl = "http://localhost:8000"
+
+    fun calculateFromAnalysis(requestBody: CalculateFromAnalysisRequest): String {
+        val headers = HttpHeaders()
+        headers.contentType = MediaType.APPLICATION_JSON
+
+        val request = HttpEntity(requestBody, headers)
+
+        return restTemplate.postForObject(
+            "$mlBaseUrl/calculate-from-analysis",
+            request,
+            String::class.java
+        ) ?: "{}"
+    }
 
     fun analyzePhotos(photos: List<MultipartFile>): String {
         val body = LinkedMultiValueMap<String, Any>()
