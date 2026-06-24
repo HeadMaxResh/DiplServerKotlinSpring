@@ -5,7 +5,9 @@ from geo.geo_analyzer import GeoAnalyzer
 from text.text_analyzer import TextAnalyzer
 from price.price_evaluator import PriceEvaluator
 from pydantic import BaseModel
+from market.market_analyzer import MarketAnalyzer
 from typing import Dict, Any
+from dotenv import load_dotenv
 import io
 import numpy as np
 import cv2
@@ -15,10 +17,15 @@ import asyncio
 
 app = FastAPI(title="Apartment Price ML Service")
 
+load_dotenv()
+
 image_analyzer = AdvancedImageAnalyzer()
 geo_analyzer = GeoAnalyzer()
 text_analyzer = TextAnalyzer()
 price_evaluator = PriceEvaluator()
+market_analyzer = MarketAnalyzer()
+
+
 
 @app.get("/health")
 def health():
@@ -170,27 +177,69 @@ class CalculateFromAnalysisRequest(BaseModel):
     imageAnalysis: Dict[str, Any]
     geoAnalysis: Dict[str, Any]
 
+def extract_city_from_address(address: str) -> str:
+    if not address:
+        return ""
+
+    return address.split(",")[0].strip()
+
 @app.post("/calculate-from-analysis")
 def calculate_from_analysis(request: CalculateFromAnalysisRequest):
+    geo_result = request.geoAnalysis
+
+    market_result = geo_result.get("marketAnalysis")
+
+    if market_result is None and geo_result.get("success"):
+        coords = geo_result.get("coordinates", {})
+
+        market_result = market_analyzer.analyze_market(
+            lat=coords.get("lat"),
+            lon=coords.get("lon"),
+            city=extract_city_from_address(geo_result.get("address", "")),
+            rooms=request.rooms,
+            area=request.area
+        )
+
+        geo_result["marketAnalysis"] = market_result
+
     price_result = price_evaluator.evaluate_price(
         area=request.area,
         rooms=request.rooms,
         text_result=request.textAnalysis,
         image_result=request.imageAnalysis,
-        geo_result=request.geoAnalysis
+        geo_result=geo_result,
+        market_result=market_result
     )
 
     return {
         "success": True,
-        "price": {
-            "recommendedPrice": price_result["finalRecommendedPrice"],
-            "minPrice": price_result["minPrice"],
-            "maxPrice": price_result["maxPrice"],
-            "marketBasePrice": price_result["marketBasePrice"],
-            "coefficients": price_result["coefficients"],
-            "priceFactors": price_result["priceFactors"]
+        "price": price_result,
+        "analysis": {
+            "textAnalysis": request.textAnalysis,
+            "imageAnalysis": request.imageAnalysis,
+            "geoAnalysis": geo_result,
+            "marketAnalysis": market_result
         }
     }
+
+class MarketAnalysisRequest(BaseModel):
+    lat: float
+    lon: float
+    city: str
+    rooms: int
+    area: float
+
+
+@app.post("/analyze-market")
+def analyze_market(request: MarketAnalysisRequest):
+    return market_analyzer.analyze_market(
+        lat=request.lat,
+        lon=request.lon,
+        city=request.city,
+        rooms=request.rooms,
+        area=request.area
+    )
+
 
 @app.post("/analyze-text")
 async def analyze_text(
@@ -198,11 +247,30 @@ async def analyze_text(
 ):
     return text_analyzer.analyze_text(description)
 
+
+
 @app.post("/analyze-location")
 async def analyze_location(
-        address: str = Form(...)
+        address: str = Form(...),
+        rooms: int = Form(...),
+        area: float = Form(...)
 ):
-    return geo_analyzer.analyze_location(address)
+    geo_result = geo_analyzer.analyze_location(address)
+
+    if geo_result.get("success"):
+        coords = geo_result["coordinates"]
+
+        market_result = market_analyzer.analyze_market(
+            lat=coords["lat"],
+            lon=coords["lon"],
+            city=address.split(",")[0].strip(),
+            rooms=rooms,
+            area=area
+        )
+
+        geo_result["marketAnalysis"] = market_result
+
+    return geo_result
 
 @app.post("/analyze-photos")
 async def analyze_photos(
@@ -262,47 +330,51 @@ def most_common(values):
 
 def get_visual_quality_level(score):
     if score >= 85:
-        return "premium"
-    elif score >= 70:
-        return "good"
-    elif score >= 50:
-        return "medium"
-    elif score >= 30:
-        return "low"
-    return "poor"
+        return "Отличное визуальное состояние"
+
+    if score >= 70:
+        return "Хорошее визуальное состояние"
+
+    if score >= 50:
+        return "Среднее визуальное состояние"
+
+    if score >= 30:
+        return "Удовлетворительное визуальное состояние"
+
+    return "Низкое визуальное состояние"
 
 
 def calculate_price_impact(score):
     if score >= 85:
         return {
-            "impact": "positive",
+            "impact": "Положительное влияние",
             "coefficient": 1.15,
             "description": "Высокое визуальное качество жилья может повысить рекомендуемую стоимость аренды до 15%"
         }
 
     if score >= 70:
         return {
-            "impact": "positive",
+            "impact": "Положительное влияние",
             "coefficient": 1.08,
             "description": "Хорошее состояние жилья может повысить рекомендуемую стоимость аренды до 8%"
         }
 
     if score >= 50:
         return {
-            "impact": "neutral",
+            "impact": "Нейтральное влияние",
             "coefficient": 1.00,
             "description": "Среднее состояние жилья не оказывает существенного влияния на стоимость"
         }
 
     if score >= 30:
         return {
-            "impact": "negative",
+            "impact": "Отрицательное влияние",
             "coefficient": 0.90,
             "description": "Низкое визуальное качество может снизить рекомендуемую стоимость аренды до 10%"
         }
 
     return {
-        "impact": "negative",
+        "impact": "Сильное отрицательное влияние",
         "coefficient": 0.80,
         "description": "Плохое состояние жилья может снизить рекомендуемую стоимость аренды до 20%"
     }
@@ -318,14 +390,26 @@ def build_recommendations(photo_results, average_score):
 
     room_types = [p["roomAnalysis"]["roomType"] for p in photo_results]
 
+    room_names = {
+        "kitchen": "Кухня",
+        "bathroom": "Ванная комната",
+        "bedroom": "Спальня",
+        "living_room": "Гостиная",
+        "hallway": "Прихожая",
+        "balcony": "Балкон"
+    }
+
     required_rooms = {"kitchen", "bathroom", "bedroom"}
     missing_rooms = required_rooms - set(room_types)
 
     if missing_rooms:
         recommendations.append(
-            f"Рекомендуется добавить фотографии следующих помещений: {', '.join(missing_rooms)}"
+            "Рекомендуется добавить фотографии следующих помещений: "
+            + ", ".join(
+                room_names[room]
+                for room in missing_rooms
+            )
         )
-
     for photo in photo_results:
         if photo["technicalQuality"]["photoQualityScore"] < 50:
             recommendations.append(
@@ -334,7 +418,7 @@ def build_recommendations(photo_results, average_score):
 
     repair_levels = [p["repairAnalysis"]["repairQuality"] for p in photo_results]
 
-    if "poor" in repair_levels:
+    if "Плохой ремонт" in repair_levels:
         recommendations.append(
             "На части фотографий обнаружены признаки низкого качества ремонта"
         )
@@ -344,7 +428,7 @@ def build_recommendations(photo_results, average_score):
         for p in photo_results
     ]
 
-    if "old_furniture" in furniture_conditions:
+    if "Старая мебель" in furniture_conditions:
         recommendations.append(
             "На части фотографий мебель выглядит устаревшей или изношенной"
         )
