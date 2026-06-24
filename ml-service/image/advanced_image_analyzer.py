@@ -11,7 +11,6 @@ class AdvancedImageAnalyzer:
     def __init__(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # ResNet50 для embeddings
         self.resnet = models.resnet50(
             weights=models.ResNet50_Weights.DEFAULT
         )
@@ -28,10 +27,8 @@ class AdvancedImageAnalyzer:
             )
         ])
 
-        # YOLOv8 для детекции объектов
         self.yolo = YOLO("../yolov8n.pt")
 
-        # CLIP для zero-shot классификации
         self.clip_model = CLIPModel.from_pretrained(
             "openai/clip-vit-base-patch32"
         ).to(self.device)
@@ -40,6 +37,67 @@ class AdvancedImageAnalyzer:
             "openai/clip-vit-base-patch32"
         )
 
+        self.room_translations = {
+            "kitchen": "Кухня",
+            "bedroom": "Спальня",
+            "living_room": "Гостиная",
+            "bathroom": "Ванная комната",
+            "hallway": "Прихожая",
+            "balcony": "Балкон"
+        }
+
+        self.repair_translations = {
+            "poor": "Плохой ремонт",
+            "basic": "Обычный ремонт",
+            "good": "Хороший ремонт",
+            "premium": "Премиальный ремонт"
+        }
+
+        self.furniture_translations = {
+            "no_furniture": "Без мебели",
+            "old_furniture": "Старая мебель",
+            "average_furniture": "Обычная мебель",
+            "new_furniture": "Новая мебель",
+            "premium_furniture": "Премиальная мебель"
+        }
+
+        self.furnishing_translations = {
+            "empty": "Без мебели",
+            "low": "Низкая наполненность",
+            "medium": "Средняя наполненность",
+            "high": "Высокая наполненность"
+        }
+
+        self.style_translations = {
+            "old_style": "Устаревший интерьер",
+            "standard": "Стандартный интерьер",
+            "modern": "Современный интерьер",
+            "minimalist": "Минималистичный интерьер",
+            "luxury": "Элитный интерьер"
+        }
+
+        self.cleanliness_translations = {
+            "dirty": "Грязно",
+            "normal": "Чисто",
+            "very_clean": "Очень чисто"
+        }
+
+        self.object_translations = {
+            "chair": "Стул",
+            "couch": "Диван",
+            "bed": "Кровать",
+            "dining table": "Обеденный стол",
+            "tv": "Телевизор",
+            "refrigerator": "Холодильник",
+            "oven": "Духовка",
+            "microwave": "Микроволновая печь",
+            "sink": "Раковина",
+            "toilet": "Унитаз",
+            "potted plant": "Комнатное растение",
+            "book": "Книга",
+            "clock": "Часы"
+        }
+
     def analyze_image(self, image: Image.Image, filename: str):
         image = image.convert("RGB")
 
@@ -47,7 +105,6 @@ class AdvancedImageAnalyzer:
         sharpness = self.calculate_sharpness(image)
 
         image_features = self.extract_resnet_features(image)
-
         detected_objects = self.detect_objects(image)
 
         room_type = self.classify_with_clip(image, {
@@ -89,6 +146,7 @@ class AdvancedImageAnalyzer:
         })
 
         furnishing_level = self.calculate_furnishing_level(detected_objects)
+
         photo_quality_score = self.calculate_photo_quality_score(
             brightness,
             sharpness
@@ -111,22 +169,28 @@ class AdvancedImageAnalyzer:
                 "photoQualityScore": round(photo_quality_score, 2)
             },
             "roomAnalysis": {
-                "roomType": room_type["label"],
+                "roomType": self.translate(room_type["label"], self.room_translations),
                 "confidence": round(room_type["confidence"], 3)
             },
             "repairAnalysis": {
-                "repairQuality": repair_quality["label"],
+                "repairQuality": self.translate(repair_quality["label"], self.repair_translations),
                 "confidence": round(repair_quality["confidence"], 3)
             },
             "furnitureAnalysis": {
-                "furnitureCondition": furniture_condition["label"],
-                "furnishingLevel": furnishing_level["level"],
+                "furnitureCondition": self.translate(
+                    furniture_condition["label"],
+                    self.furniture_translations
+                ),
+                "furnishingLevel": self.translate(
+                    furnishing_level["level"],
+                    self.furnishing_translations
+                ),
                 "furnitureObjectsCount": furnishing_level["count"],
                 "confidence": round(furniture_condition["confidence"], 3)
             },
             "interiorAnalysis": {
-                "style": interior_style["label"],
-                "cleanliness": cleanliness["label"],
+                "style": self.translate(interior_style["label"], self.style_translations),
+                "cleanliness": self.translate(cleanliness["label"], self.cleanliness_translations),
                 "styleConfidence": round(interior_style["confidence"], 3),
                 "cleanlinessConfidence": round(cleanliness["confidence"], 3)
             },
@@ -134,6 +198,9 @@ class AdvancedImageAnalyzer:
             "visualScore": round(visual_score, 2),
             "imageFeatureSize": len(image_features)
         }
+
+    def translate(self, value: str, dictionary: dict):
+        return dictionary.get(value, value)
 
     def extract_resnet_features(self, image: Image.Image):
         tensor = self.resnet_transform(image).unsqueeze(0).to(self.device)
@@ -174,7 +241,7 @@ class AdvancedImageAnalyzer:
 
                 if class_name in target_classes and confidence >= 0.35:
                     detected.append({
-                        "object": class_name,
+                        "object": self.translate(class_name, self.object_translations),
                         "confidence": round(confidence, 3)
                     })
 
@@ -233,20 +300,22 @@ class AdvancedImageAnalyzer:
         return score
 
     def calculate_furnishing_level(self, detected_objects):
+        furniture_names = {
+            "Стул",
+            "Диван",
+            "Кровать",
+            "Обеденный стол",
+            "Телевизор",
+            "Холодильник",
+            "Духовка",
+            "Микроволновая печь",
+            "Раковина",
+            "Унитаз"
+        }
+
         furniture_objects = [
             obj for obj in detected_objects
-            if obj["object"] in {
-                "chair",
-                "couch",
-                "bed",
-                "dining table",
-                "tv",
-                "refrigerator",
-                "oven",
-                "microwave",
-                "sink",
-                "toilet"
-            }
+            if obj["object"] in furniture_names
         ]
 
         count = len(furniture_objects)

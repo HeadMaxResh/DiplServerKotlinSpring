@@ -42,10 +42,12 @@ class ApartmentAnalysisController(
         consumes = [MediaType.APPLICATION_FORM_URLENCODED_VALUE]
     )
     fun analyzeLocation(
-        @RequestParam address: String
+        @RequestParam address: String,
+        @RequestParam rooms: Int,
+        @RequestParam area: Double
     ): ResponseEntity<String> {
         return ResponseEntity.ok(
-            mlServiceClient.analyzeLocation(address)
+            mlServiceClient.analyzeLocation(address, rooms, area)
         )
     }
 

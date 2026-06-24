@@ -46,12 +46,18 @@ class MlServiceClient(
         return postMultipart("$mlBaseUrl/analyze-photos", body)
     }
 
-    fun analyzeLocation(address: String): String {
-        val body = LinkedMultiValueMap<String, String>()
-        body.add("address", address)
-
+    fun analyzeLocation(
+        address: String,
+        rooms: Int,
+        area: Double
+    ): String {
         val headers = HttpHeaders()
         headers.contentType = MediaType.APPLICATION_FORM_URLENCODED
+
+        val body = LinkedMultiValueMap<String, String>()
+        body.add("address", address)
+        body.add("rooms", rooms.toString())
+        body.add("area", area.toString())
 
         val request = HttpEntity(body, headers)
 

@@ -31,9 +31,9 @@ class TextAnalyzer:
             "textLength": len(description),
             "normalizedTextLength": len(normalized_text),
             "apartmentFeatures": apartment_features,
-            "repairFeatures": repair_features,
-            "furnitureFeatures": furniture_features,
-            "appliancesFeatures": appliances_features,
+            "repairFeatures": self.to_public_repair_features(repair_features),
+            "furnitureFeatures": self.to_public_furniture_features(furniture_features),
+            "appliancesFeatures": self.to_public_appliances_features(appliances_features),
             "tenantRules": tenant_rules,
             "scores": {
                 "descriptionQualityScore": quality_score,
@@ -55,47 +55,21 @@ class TextAnalyzer:
         text = text.lower()
         text = text.replace("ё", "е")
         text = re.sub(r"\s+", " ", text)
-        text = text.strip()
-        return text
+        return text.strip()
 
     def extract_apartment_features(self, text: str):
-        rooms = self.extract_rooms(text)
-        area = self.extract_area(text)
-        floor = self.extract_floor(text)
-
         return {
-            "rooms": rooms,
-            "area": area,
-            "floor": floor,
-            "hasBalcony": self.contains_any(text, [
-                "балкон", "лоджия"
-            ]),
-            "hasParking": self.contains_any(text, [
-                "парковка", "паркинг", "машиноместо"
-            ]),
-            "hasElevator": self.contains_any(text, [
-                "лифт", "грузовой лифт", "пассажирский лифт"
-            ]),
-            "isStudio": self.contains_any(text, [
-                "студия", "квартира-студия"
-            ]),
-            "hasSeparateRooms": self.contains_any(text, [
-                "изолированные комнаты", "раздельные комнаты"
-            ])
+            "rooms": self.extract_rooms(text),
+            "area": self.extract_area(text),
+            "floor": self.extract_floor(text),
+            "hasBalcony": self.contains_any(text, ["балкон", "лоджия"]),
+            "hasParking": self.contains_any(text, ["парковка", "паркинг", "машиноместо"]),
+            "hasElevator": self.contains_any(text, ["лифт", "грузовой лифт", "пассажирский лифт"]),
+            "isStudio": self.contains_any(text, ["студия", "квартира-студия"]),
+            "hasSeparateRooms": self.contains_any(text, ["изолированные комнаты", "раздельные комнаты"])
         }
 
     def extract_rooms(self, text: str):
-        patterns = [
-            r"(\d+)\s*[- ]?комнат",
-            r"(\d+)\s*к\b",
-            r"(\d+)\s*комн",
-            r"однокомнат",
-            r"двухкомнат",
-            r"трехкомнат",
-            r"трёхкомнат",
-            r"четырехкомнат"
-        ]
-
         word_rooms = {
             "однокомнат": 1,
             "двухкомнат": 2,
@@ -108,7 +82,13 @@ class TextAnalyzer:
             if word in text:
                 return value
 
-        for pattern in patterns[:3]:
+        patterns = [
+            r"(\d+)\s*[- ]?комнат",
+            r"(\d+)\s*к\b",
+            r"(\d+)\s*комн"
+        ]
+
+        for pattern in patterns:
             match = re.search(pattern, text)
             if match:
                 return int(match.group(1))
@@ -160,39 +140,26 @@ class TextAnalyzer:
         repair_quality = "unknown"
 
         if self.contains_any(text, [
-            "евроремонт",
-            "дизайнерский ремонт",
-            "премиальный ремонт",
-            "новый ремонт",
-            "современный ремонт",
-            "свежий ремонт",
+            "евроремонт", "дизайнерский ремонт", "премиальный ремонт",
+            "новый ремонт", "современный ремонт", "свежий ремонт",
             "качественный ремонт"
         ]):
             repair_quality = "good"
 
         if self.contains_any(text, [
-            "косметический ремонт",
-            "обычный ремонт",
-            "жилое состояние",
-            "чистая квартира"
+            "косметический ремонт", "обычный ремонт",
+            "жилое состояние", "чистая квартира"
         ]):
             repair_quality = "basic"
 
         if self.contains_any(text, [
-            "без ремонта",
-            "требуется ремонт",
-            "старый ремонт",
-            "убитая",
-            "плохое состояние",
-            "нужен ремонт"
+            "без ремонта", "требуется ремонт", "старый ремонт",
+            "убитая", "плохое состояние", "нужен ремонт"
         ]):
             repair_quality = "poor"
 
         if self.contains_any(text, [
-            "премиум",
-            "люкс",
-            "бизнес-класс",
-            "элитный ремонт"
+            "премиум", "люкс", "бизнес-класс", "элитный ремонт"
         ]):
             repair_quality = "premium"
 
@@ -249,34 +216,18 @@ class TextAnalyzer:
             "hasBed": self.contains_any(text, [
                 "кровать", "спальное место"
             ]),
-            "hasSofa": self.contains_any(text, [
-                "диван"
-            ])
+            "hasSofa": self.contains_any(text, ["диван"])
         }
 
     def extract_appliances_features(self, text: str):
         appliances = {
-            "refrigerator": self.contains_any(text, [
-                "холодильник"
-            ]),
-            "washingMachine": self.contains_any(text, [
-                "стиральная машина", "стиралка"
-            ]),
-            "dishwasher": self.contains_any(text, [
-                "посудомоечная машина", "посудомойка"
-            ]),
-            "airConditioner": self.contains_any(text, [
-                "кондиционер", "сплит-система"
-            ]),
-            "tv": self.contains_any(text, [
-                "телевизор", "тв"
-            ]),
-            "microwave": self.contains_any(text, [
-                "микроволновка", "свч"
-            ]),
-            "internet": self.contains_any(text, [
-                "интернет", "wi-fi", "wifi", "вайфай"
-            ])
+            "refrigerator": self.contains_any(text, ["холодильник"]),
+            "washingMachine": self.contains_any(text, ["стиральная машина", "стиралка"]),
+            "dishwasher": self.contains_any(text, ["посудомоечная машина", "посудомойка"]),
+            "airConditioner": self.contains_any(text, ["кондиционер", "сплит-система"]),
+            "tv": self.contains_any(text, ["телевизор", "тв"]),
+            "microwave": self.contains_any(text, ["микроволновка", "свч"]),
+            "internet": self.contains_any(text, ["интернет", "wi-fi", "wifi", "вайфай"])
         }
 
         count = sum(1 for value in appliances.values() if value)
@@ -289,35 +240,18 @@ class TextAnalyzer:
 
     def extract_tenant_rules(self, text: str):
         return {
-            "petsAllowed": self.contains_any(text, [
-                "можно с животными", "с животными можно", "разрешены животные"
-            ]),
-            "petsForbidden": self.contains_any(text, [
-                "без животных", "животные запрещены", "с животными нельзя"
-            ]),
-            "childrenAllowed": self.contains_any(text, [
-                "можно с детьми", "с детьми можно"
-            ]),
-            "childrenForbidden": self.contains_any(text, [
-                "без детей", "с детьми нельзя"
-            ]),
-            "smokingForbidden": self.contains_any(text, [
-                "не курить", "курение запрещено", "без курения"
-            ]),
-            "longTermOnly": self.contains_any(text, [
-                "на длительный срок", "долгосрочно", "длительная аренда"
-            ]),
-            "depositMentioned": self.contains_any(text, [
-                "залог", "депозит"
-            ]),
-            "utilitiesMentioned": self.contains_any(text, [
-                "коммунальные", "ку", "счетчики", "свет и вода"
-            ])
+            "petsAllowed": self.contains_any(text, ["можно с животными", "с животными можно", "разрешены животные"]),
+            "petsForbidden": self.contains_any(text, ["без животных", "животные запрещены", "с животными нельзя"]),
+            "childrenAllowed": self.contains_any(text, ["можно с детьми", "с детьми можно"]),
+            "childrenForbidden": self.contains_any(text, ["без детей", "с детьми нельзя"]),
+            "smokingForbidden": self.contains_any(text, ["не курить", "курение запрещено", "без курения"]),
+            "longTermOnly": self.contains_any(text, ["на длительный срок", "долгосрочно", "длительная аренда"]),
+            "depositMentioned": self.contains_any(text, ["залог", "депозит"]),
+            "utilitiesMentioned": self.contains_any(text, ["коммунальные", "ку", "счетчики", "свет и вода"])
         }
 
     def calculate_description_quality_score(self, text: str):
         score = 0
-
         length = len(text)
 
         if length >= 500:
@@ -330,18 +264,9 @@ class TextAnalyzer:
             score += 5
 
         important_keywords = [
-            "ремонт",
-            "мебель",
-            "техника",
-            "интернет",
-            "балкон",
-            "залог",
-            "коммунальные",
-            "метро",
-            "остановка",
-            "магазин",
-            "школа",
-            "детский сад"
+            "ремонт", "мебель", "техника", "интернет", "балкон",
+            "залог", "коммунальные", "метро", "остановка",
+            "магазин", "школа", "детский сад"
         ]
 
         keyword_count = sum(1 for word in important_keywords if word in text)
@@ -367,7 +292,6 @@ class TextAnalyzer:
             quality_score
     ):
         score = 0
-
         score += quality_score * 0.25
 
         repair_scores = {
@@ -439,34 +363,34 @@ class TextAnalyzer:
     def calculate_price_impact(self, score: float):
         if score >= 85:
             return {
-                "impact": "strong_positive",
+                "impact": "Сильное положительное влияние",
                 "coefficient": 1.12,
                 "description": "Описание содержит признаки высокого качества жилья и может повысить оценку аренды до 12%"
             }
 
         if score >= 70:
             return {
-                "impact": "positive",
+                "impact": "Положительное влияние",
                 "coefficient": 1.07,
                 "description": "Описание содержит положительные признаки и может повысить оценку аренды до 7%"
             }
 
         if score >= 50:
             return {
-                "impact": "neutral",
+                "impact": "Нейтральное влияние",
                 "coefficient": 1.00,
                 "description": "Описание не оказывает существенного влияния на стоимость"
             }
 
         if score >= 30:
             return {
-                "impact": "negative",
+                "impact": "Отрицательное влияние",
                 "coefficient": 0.95,
                 "description": "Описание неполное, возможна пониженная точность оценки"
             }
 
         return {
-            "impact": "strong_negative",
+            "impact": "Сильное отрицательное влияние",
             "coefficient": 0.90,
             "description": "Описание недостаточно информативно и может снизить доверие к объявлению"
         }
@@ -510,6 +434,53 @@ class TextAnalyzer:
             recommendations.append("Описание достаточно информативное и подходит для оценки стоимости.")
 
         return recommendations
+
+    def to_public_repair_features(self, repair_features):
+        result = dict(repair_features)
+        result["repairQuality"] = self.translate_repair_quality(
+            repair_features["repairQuality"]
+        )
+        return result
+
+    def to_public_furniture_features(self, furniture_features):
+        result = dict(furniture_features)
+        result["furnitureCondition"] = self.translate_furniture_condition(
+            furniture_features["furnitureCondition"]
+        )
+        return result
+
+    def to_public_appliances_features(self, appliances_features):
+        result = dict(appliances_features)
+        result["appliancesLevel"] = self.translate_appliances_level(
+            appliances_features["appliancesLevel"]
+        )
+        return result
+
+    def translate_repair_quality(self, value: str):
+        return {
+            "unknown": "Не определено",
+            "poor": "Плохой ремонт",
+            "basic": "Обычный ремонт",
+            "good": "Хороший ремонт",
+            "premium": "Премиальный ремонт"
+        }.get(value, value)
+
+    def translate_furniture_condition(self, value: str):
+        return {
+            "unknown": "Не определено",
+            "none": "Без мебели",
+            "poor": "Старая или изношенная мебель",
+            "basic": "Обычная мебель",
+            "good": "Хорошая мебель"
+        }.get(value, value)
+
+    def translate_appliances_level(self, value: str):
+        return {
+            "none": "Техника не указана",
+            "low": "Низкий уровень оснащения",
+            "medium": "Средний уровень оснащения",
+            "high": "Высокий уровень оснащения"
+        }.get(value, value)
 
     def contains_any(self, text: str, words: list[str]):
         return any(word in text for word in words)
