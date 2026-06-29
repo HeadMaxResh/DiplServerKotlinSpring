@@ -70,65 +70,143 @@ class GeoAnalyzer:
             return None
 
     def find_nearest_infrastructure(self, lat: float, lon: float):
-        radius = 2500
+        radius = 1200
 
-        categories = {
-            "busStops": [
-                'nwr["highway"="bus_stop"]',
-                'nwr["public_transport"="platform"]',
-                'nwr["public_transport"="stop_position"]'
-            ],
-            "tramStops": [
-                'nwr["railway"="tram_stop"]'
-            ],
-            "metroStations": [
-                'nwr["railway"="subway_entrance"]',
-                'nwr["station"="subway"]',
-                'nwr["railway"="station"]["station"="subway"]'
-            ],
-            "schools": [
-                'nwr["amenity"="school"]'
-            ],
-            "kindergartens": [
-                'nwr["amenity"="kindergarten"]'
-            ],
-            "hospitals": [
-                'nwr["amenity"="hospital"]'
-            ],
-            "clinics": [
-                'nwr["amenity"="clinic"]',
-                'nwr["amenity"="doctors"]'
-            ],
-            "shops": [
-                'nwr["shop"="supermarket"]',
-                'nwr["shop"="convenience"]',
-                'nwr["shop"="mall"]',
-                'nwr["amenity"="marketplace"]'
-            ],
-            "pharmacies": [
-                'nwr["amenity"="pharmacy"]'
-            ],
-            "parks": [
-                'nwr["leisure"="park"]',
-                'nwr["landuse"="recreation_ground"]',
-                'nwr["leisure"="garden"]'
-            ],
-            "parking": [
-                'nwr["amenity"="parking"]'
-            ]
+        result = {
+            "busStops": [],
+            "tramStops": [],
+            "metroStations": [],
+            "schools": [],
+            "kindergartens": [],
+            "hospitals": [],
+            "clinics": [],
+            "shops": [],
+            "pharmacies": [],
+            "parks": [],
+            "parking": []
         }
 
-        result = {}
+        query = f"""
+        [out:json][timeout:20];
+        (
+          nwr["highway"="bus_stop"](around:{radius},{lat},{lon});
+          nwr["railway"="tram_stop"](around:{radius},{lat},{lon});
+          nwr["railway"="subway_entrance"](around:{radius},{lat},{lon});
+          nwr["station"="subway"](around:{radius},{lat},{lon});
 
-        for category_name, filters in categories.items():
-            result[category_name] = self.query_category(
-                lat=lat,
-                lon=lon,
-                radius=radius,
-                filters=filters
+          nwr["amenity"="school"](around:{radius},{lat},{lon});
+          nwr["amenity"="kindergarten"](around:{radius},{lat},{lon});
+          nwr["amenity"="hospital"](around:{radius},{lat},{lon});
+          nwr["amenity"="clinic"](around:{radius},{lat},{lon});
+          nwr["amenity"="doctors"](around:{radius},{lat},{lon});
+
+          nwr["shop"="supermarket"](around:{radius},{lat},{lon});
+          nwr["shop"="convenience"](around:{radius},{lat},{lon});
+          nwr["amenity"="pharmacy"](around:{radius},{lat},{lon});
+
+          nwr["leisure"="park"](around:{radius},{lat},{lon});
+          nwr["amenity"="parking"](around:{radius},{lat},{lon});
+        );
+        out center tags 80;
+        """
+
+        try:
+            response = requests.post(
+                self.overpass_url,
+                data={"data": query},
+                headers={"User-Agent": "DiplomaRealEstateAnalyzer/1.0"},
+                timeout=25
             )
 
-        return result
+            if response.status_code != 200:
+                print("OVERPASS STATUS:", response.status_code)
+                return result
+
+            data = response.json()
+            elements = data.get("elements", [])
+
+            for element in elements:
+                point = self.extract_point(element)
+
+                if point is None:
+                    continue
+
+                tags = element.get("tags", {})
+
+                obj = {
+                    "name": self.extract_name(tags),
+                    "distanceMeters": round(
+                        self.calculate_distance(
+                            lat,
+                            lon,
+                            point["lat"],
+                            point["lon"]
+                        )
+                    ),
+                    "type": self.extract_type(tags),
+                    "osmType": element.get("type"),
+                    "osmId": element.get("id")
+                }
+
+                category = self.detect_category(tags)
+
+                if category is not None:
+                    result[category].append(obj)
+
+            for key in result.keys():
+                result[key] = sorted(
+                    self.remove_duplicates(result[key]),
+                    key=lambda x: x["distanceMeters"]
+                )[:3]
+
+            return result
+
+        except Exception as e:
+            print("OVERPASS REQUEST ERROR:", e)
+            return result
+
+    def detect_category(self, tags: dict):
+        amenity = tags.get("amenity")
+        shop = tags.get("shop")
+        railway = tags.get("railway")
+        highway = tags.get("highway")
+        station = tags.get("station")
+        leisure = tags.get("leisure")
+
+        if highway == "bus_stop":
+            return "busStops"
+
+        if railway == "tram_stop":
+            return "tramStops"
+
+        if railway == "subway_entrance" or station == "subway":
+            return "metroStations"
+
+        if amenity == "school":
+            return "schools"
+
+        if amenity == "kindergarten":
+            return "kindergartens"
+
+        if amenity == "hospital":
+            return "hospitals"
+
+        if amenity in ["clinic", "doctors"]:
+            return "clinics"
+
+        if shop in ["supermarket", "convenience"]:
+            return "shops"
+
+        if amenity == "pharmacy":
+            return "pharmacies"
+
+        if leisure == "park":
+            return "parks"
+
+        if amenity == "parking":
+            return "parking"
+
+        return None
 
     def query_category(self, lat: float, lon: float, radius: int, filters: list[str]):
         query_parts = []
